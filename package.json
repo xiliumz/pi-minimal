@@ -4,7 +4,15 @@
 	"description": "Bash-style prompt layout for pi — ~/path (branch*): with /info",
 	"type": "module",
 	"license": "MIT",
-	"author": "dayatani",
+	"author": "Azaria Beryl",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xiliumz/pi-minimal.git"
+	},
+	"homepage": "https://github.com/xiliumz/pi-minimal#readme",
+	"bugs": {
+		"url": "https://github.com/xiliumz/pi-minimal/issues"
+	},
 	"keywords": [
 		"pi",
 		"extension",

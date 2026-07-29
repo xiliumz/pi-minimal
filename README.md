@@ -11,11 +11,11 @@ No header. No footer. Session stats live behind `/info`.
 ## Install
 
 ```bash
-# from a local checkout
-pi install ~/pria-random/pi-minimal
+# from git
+pi install git:github.com/xiliumz/pi-minimal
 
-# from git (after you push)
-pi install git:github.com/dayatani/pi-minimal
+# from a local checkout
+pi install /path/to/pi-minimal
 
 # from npm (after you publish)
 pi install npm:pi-minimal
@@ -43,11 +43,11 @@ Pi resets extension UI before the old session context goes stale, then re-runs
 ## Develop
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/xiliumz/pi-minimal.git
 cd pi-minimal
 
 # point pi at the working tree (no copy)
-pi install ~/pria-random/pi-minimal
+pi install "$PWD"
 
 # edit → /reload inside pi
 ```
@@ -63,30 +63,13 @@ src/format.ts         # cwd/tokens helpers
 src/ui.ts             # empty header/footer component
 ```
 
-## Publish
-
-```bash
-# 1. push to GitHub
-gh repo create dayatani/pi-minimal --public --source=. --push
-
-# 2a. share via git
-pi install git:github.com/dayatani/pi-minimal
-
-# 2b. or publish to npm
-npm login
-npm publish --access public
-pi install npm:pi-minimal
-```
-
-Bump `version` in `package.json` before each release.
-
 ## Uninstall
 
 ```bash
-pi remove ~/pria-random/pi-minimal
+pi remove git:github.com/xiliumz/pi-minimal
 # or
 pi remove npm:pi-minimal
-pi remove git:github.com/dayatani/pi-minimal
+pi remove /path/to/pi-minimal
 ```
 
 ## License
