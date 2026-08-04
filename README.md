@@ -33,6 +33,7 @@ Restart pi or run `/reload`.
 | `/info` | Model, thinking level, context %, tokens, cost, session file/id |
 
 Multiline input and slash-command autocomplete start at column 0 (under the path, not under `:`).
+Soft-wrapped continuations use the full terminal width — only the first visual line shares space with the prompt.
 
 ## Notes
 

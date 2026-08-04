@@ -6,7 +6,13 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { formatCwd, isBorderOrScrollLine } from "./format.js";
+import {
+	formatCwd,
+	isBorderOrScrollLine,
+	wordWrapLineVariable,
+	type GraphemeSeg,
+	type WrapChunk,
+} from "./format.js";
 import type { GitState } from "./git.js";
 
 export interface BashPromptState {
@@ -17,11 +23,25 @@ export interface BashPromptState {
 	onMount: (tui: TUI) => void;
 }
 
+/** Subset of Editor internals used for dual-width soft-wrap. */
+interface EditorInternals {
+	state: { lines: string[]; cursorLine: number; cursorCol: number };
+	scrollOffset: number;
+	segment(text: string, mode: "word" | "grapheme"): Iterable<{ segment: string; index: number }>;
+}
+
+interface LayoutLine {
+	text: string;
+	hasCursor: boolean;
+	cursorPos?: number;
+}
+
 /**
  * Borderless editor that prefixes the first input line with a bash-style prompt:
  *   ~/path (branch*): |
  *
- * Continuation lines start at column 0 (under the start of the prompt).
+ * Soft-wrap: first visual line shares the row with the prompt; every continuation
+ * line uses the full terminal width at column 0.
  * Slash/path autocomplete also renders at column 0, full width.
  */
 export function createBashPromptEditor(
@@ -29,6 +49,9 @@ export function createBashPromptEditor(
 	state: BashPromptState,
 ): new (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => CustomEditor {
 	return class BashPromptEditor extends CustomEditor {
+		/** Columns reserved on the first visual line for the bash prompt. */
+		private promptInset = 0;
+
 		constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
 			super(tui, theme, keybindings, { paddingX: 0 });
 			state.onMount(tui);
@@ -52,22 +75,114 @@ export function createBashPromptEditor(
 			return `${working}${path}${branch}${thm.fg("dim", ":")}`;
 		}
 
+		private internals(): EditorInternals {
+			return this as unknown as EditorInternals;
+		}
+
+		/**
+		 * Same shape as Editor.layoutText, but the first logical line's first chunk
+		 * is narrowed by `promptInset` so the prompt fits on that row. Soft-wrap
+		 * continuations (and later hard lines) use the full `contentWidth`.
+		 */
+		layoutText(contentWidth: number): LayoutLine[] {
+			// Keep method calls on `ed` so `segment` retains Editor as `this`
+			// (it calls `this.validPasteIds()` internally).
+			const ed = this.internals();
+			const layoutLines: LayoutLine[] = [];
+			const inset = Math.max(0, this.promptInset);
+			const firstWidth = Math.max(1, contentWidth - inset);
+
+			if (ed.state.lines.length === 0 || (ed.state.lines.length === 1 && ed.state.lines[0] === "")) {
+				layoutLines.push({ text: "", hasCursor: true, cursorPos: 0 });
+				return layoutLines;
+			}
+
+			for (let i = 0; i < ed.state.lines.length; i++) {
+				const line = ed.state.lines[i] || "";
+				const isCurrentLine = i === ed.state.cursorLine;
+				const lineVisibleWidth = visibleWidth(line);
+				// Only the very first logical line pays the prompt tax, and only on
+				// its first visual chunk. Hard-newline lines are full width.
+				const useInset = i === 0 && inset > 0;
+				const fitsSingle =
+					lineVisibleWidth <= (useInset ? firstWidth : contentWidth);
+
+				if (fitsSingle) {
+					if (isCurrentLine) {
+						layoutLines.push({
+							text: line,
+							hasCursor: true,
+							cursorPos: ed.state.cursorCol,
+						});
+					} else {
+						layoutLines.push({ text: line, hasCursor: false });
+					}
+					continue;
+				}
+
+				const graphemes: GraphemeSeg[] = [...ed.segment(line, "grapheme")].map((s) => ({
+					segment: s.segment,
+					index: s.index,
+				}));
+				const chunks: WrapChunk[] = useInset
+					? wordWrapLineVariable(line, firstWidth, contentWidth, graphemes)
+					: wordWrapLineVariable(line, contentWidth, contentWidth, graphemes);
+
+				for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+					const chunk = chunks[chunkIndex]!;
+					const isLastChunk = chunkIndex === chunks.length - 1;
+					let hasCursorInChunk = false;
+					let adjustedCursorPos = 0;
+
+					if (isCurrentLine) {
+						const cursorPos = ed.state.cursorCol;
+						if (isLastChunk) {
+							hasCursorInChunk = cursorPos >= chunk.startIndex;
+							adjustedCursorPos = cursorPos - chunk.startIndex;
+						} else {
+							hasCursorInChunk =
+								cursorPos >= chunk.startIndex && cursorPos < chunk.endIndex;
+							if (hasCursorInChunk) {
+								adjustedCursorPos = cursorPos - chunk.startIndex;
+								if (adjustedCursorPos > chunk.text.length) {
+									adjustedCursorPos = chunk.text.length;
+								}
+							}
+						}
+					}
+
+					if (hasCursorInChunk) {
+						layoutLines.push({
+							text: chunk.text,
+							hasCursor: true,
+							cursorPos: adjustedCursorPos,
+						});
+					} else {
+						layoutLines.push({ text: chunk.text, hasCursor: false });
+					}
+				}
+			}
+
+			return layoutLines;
+		}
+
 		render(width: number): string[] {
 			const prompt = this.promptString();
 			const promptW = visibleWidth(prompt);
-			// First line shares the row with the prompt; wrap all content to that width
-			// so soft-wrap breaks match the visible first line. Continuations sit at col 0.
-			const innerWidth = Math.max(8, width - promptW);
+			this.promptInset = promptW;
 
-			const raw = super.render(innerWidth);
+			// Full terminal width — layoutText narrows only the first visual chunk.
+			const raw = super.render(width);
+			this.promptInset = 0;
+
 			if (raw.length === 0) {
-				return [truncateToWidth(prompt, width)];
+				return [truncateToWidth(prompt, width, "")];
 			}
 
 			// raw: [topBorder, ...content, bottomBorder, ...autocomplete?]
 			const withoutTop = raw.slice(1);
 			if (withoutTop.length === 0) {
-				return [truncateToWidth(prompt, width)];
+				return [truncateToWidth(prompt, width, "")];
 			}
 
 			let borderIdx = -1;
@@ -80,17 +195,22 @@ export function createBashPromptEditor(
 
 			const content = borderIdx >= 0 ? withoutTop.slice(0, borderIdx) : withoutTop;
 			const out: string[] = [];
+			const scrolled = this.internals().scrollOffset > 0;
+			// First content row is padded to full width by Editor; keep only the
+			// budget to the right of the prompt, then splice the prompt in.
+			const firstBudget = Math.max(1, width - promptW);
 
 			if (content.length === 0) {
-				out.push(truncateToWidth(prompt, width));
+				out.push(truncateToWidth(prompt, width, ""));
 			} else {
 				for (let i = 0; i < content.length; i++) {
 					const line = content[i]!;
-					if (i === 0) {
-						out.push(truncateToWidth(prompt + line, width));
+					if (i === 0 && !scrolled) {
+						const body = truncateToWidth(line, firstBudget, "");
+						out.push(truncateToWidth(prompt + body, width, ""));
 					} else {
-						// Column 0 — under the start of the prompt, not under `:`.
-						out.push(truncateToWidth(line, width));
+						// Column 0 — full width under the start of the prompt.
+						out.push(truncateToWidth(line, width, ""));
 					}
 				}
 			}
@@ -101,7 +221,7 @@ export function createBashPromptEditor(
 			).autocompleteList;
 			if (this.isShowingAutocomplete() && acList) {
 				for (const line of acList.render(width)) {
-					out.push(truncateToWidth(line, width));
+					out.push(truncateToWidth(line, width, ""));
 				}
 			}
 
