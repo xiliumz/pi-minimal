@@ -54,6 +54,11 @@ export function createBashPromptEditor(
 
 		constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
 			super(tui, theme, keybindings, { paddingX: 0 });
+			// pi-tui's Editor declares `private layoutText`; TS forbids a subclass
+			// member with that name (TS2415/TS2322), but JS ignores `private` at
+			// runtime — so install the override as an instance property instead.
+			(this as unknown as { layoutText: (contentWidth: number) => LayoutLine[] })
+				.layoutText = (contentWidth) => this.layoutWithInset(contentWidth);
 			state.onMount(tui);
 		}
 
@@ -83,8 +88,9 @@ export function createBashPromptEditor(
 		 * Same shape as Editor.layoutText, but the first logical line's first chunk
 		 * is narrowed by `promptInset` so the prompt fits on that row. Soft-wrap
 		 * continuations (and later hard lines) use the full `contentWidth`.
+		 * Installed as the runtime `layoutText` override in the constructor.
 		 */
-		layoutText(contentWidth: number): LayoutLine[] {
+		layoutWithInset(contentWidth: number): LayoutLine[] {
 			// Keep method calls on `ed` so `segment` retains Editor as `this`
 			// (it calls `this.validPasteIds()` internally).
 			const ed = this.internals();
