@@ -1,10 +1,9 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
 	ExtensionCommandContext,
-	ExtensionContext,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { computeCacheWaste, getUsageCostBreakdown, type BranchEntry } from "./cost.js";
 import { formatCwd, formatTokens } from "./format.js";
 
 interface TokenStats {
@@ -19,20 +18,13 @@ interface TokenStats {
 }
 
 type SessionManagerLite = {
-	getBranch: () => ReadonlyArray<{
-		type: string;
-		message?: {
-			role?: string;
-			content?: unknown;
-			usage?: AssistantMessage["usage"];
-		};
-	}>;
+	getBranch: () => ReadonlyArray<BranchEntry>;
 	getSessionName?: () => string | undefined;
 	getSessionFile?: () => string | undefined;
 	getSessionId?: () => string | undefined;
 };
 
-function collectTokenStats(ctx: ExtensionContext): TokenStats {
+function collectTokenStats(branch: ReadonlyArray<BranchEntry>): TokenStats {
 	let input = 0;
 	let output = 0;
 	let cacheRead = 0;
@@ -42,8 +34,7 @@ function collectTokenStats(ctx: ExtensionContext): TokenStats {
 	let userMessages = 0;
 	let toolCalls = 0;
 
-	const sm = ctx.sessionManager as SessionManagerLite;
-	for (const entry of sm.getBranch()) {
+	for (const entry of branch) {
 		if (entry.type !== "message" || !entry.message) continue;
 		const msg = entry.message;
 		if (msg.role === "user") {
@@ -73,10 +64,13 @@ export function buildInfoLines(
 	theme: Theme,
 	thinkingLevel: string,
 ): string[] {
-	const stats = collectTokenStats(ctx);
+	const sm = ctx.sessionManager as SessionManagerLite;
+	const branch = sm.getBranch();
+	const stats = collectTokenStats(branch);
+	const waste = computeCacheWaste(branch, ctx.modelRegistry);
+	const costBreakdown = getUsageCostBreakdown(branch);
 	const usage = ctx.getContextUsage();
 	const model = ctx.model;
-	const sm = ctx.sessionManager as SessionManagerLite;
 	const dim = (s: string) => theme.fg("dim", s);
 	const label = (k: string, v: string) => `${dim(k.padEnd(14))} ${v}`;
 	const lines: string[] = [];
@@ -126,8 +120,26 @@ export function buildInfoLines(
 	lines.push(
 		label("Total", formatTokens(stats.input + stats.output + stats.cacheRead + stats.cacheWrite)),
 	);
-	lines.push(label("Cost", `$${stats.cost.toFixed(4)}`));
 	lines.push("");
+
+	if (stats.cost > 0 || waste.missedTokens > 0) {
+		lines.push(theme.bold("Cost"));
+		lines.push(`${dim("Total:")} $${stats.cost.toFixed(3)}`);
+		if (costBreakdown.length > 1) {
+			for (const entry of costBreakdown) {
+				lines.push(
+					`  ${dim(`${entry.key}:`)} $${entry.cost.toFixed(3)} ${dim(`(${formatTokens(entry.tokens)} tokens)`)}`,
+				);
+			}
+		}
+		if (waste.missedTokens > 0) {
+			const missLabel = waste.missCount === 1 ? "1 miss" : `${waste.missCount} misses`;
+			lines.push(
+				`${dim("Cache Re-billed:")} $${waste.missedCost.toFixed(3)} ${dim(`(${waste.missedTokens.toLocaleString()} tokens, ${missLabel})`)}`,
+			);
+		}
+		lines.push("");
+	}
 
 	lines.push(theme.bold("Messages (branch)"));
 	lines.push(label("User", `${stats.userMessages}`));
