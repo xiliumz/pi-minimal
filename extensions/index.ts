@@ -7,7 +7,7 @@
  * Header/footer chrome removed. Session stats via /info.
  */
 
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { createBashPromptEditor } from "../src/editor.js";
 import { fetchGitState, type GitState } from "../src/git.js";
@@ -87,12 +87,17 @@ export default function bashLayoutExtension(pi: ExtensionAPI): void {
 		ctx.ui.setEditorComponent((tui, theme, keybindings) => new Editor(tui, theme, keybindings));
 	});
 
-	const infoHandler = async (_args: string, ctx: ExtensionCommandContext) => {
+	const showInfo = async (ctx: ExtensionContext) => {
 		await showInfoUi(ctx, pi.getThinkingLevel());
 	};
 
 	pi.registerCommand("info", {
 		description: "Show model, tokens, cost, and context usage for this session",
-		handler: infoHandler,
+		handler: (_args, ctx) => showInfo(ctx),
+	});
+
+	pi.registerShortcut("f8", {
+		description: "Show session info",
+		handler: showInfo,
 	});
 }

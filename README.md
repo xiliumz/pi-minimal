@@ -6,7 +6,7 @@ Bash-style prompt layout for [pi](https://pi.dev).
 ~/project (main*): |
 ```
 
-No header. No footer. Session stats live behind `/info`.
+No header. No footer. Session stats live behind `/info` or `F8`.
 
 ## Install
 
@@ -30,7 +30,7 @@ Restart pi or run `/reload`.
 | Prompt | `~/path (branch*):` — dirty tree shows `*` |
 | Spinner | Shown in the prompt while the agent runs |
 | Header / footer | Removed |
-| `/info` | Model, thinking level, context %, tokens, cost, session file/id |
+| `/info` / `F8` | Model, thinking level, context %, tokens, cost, session file/id |
 
 Multiline input and slash-command autocomplete start at column 0 (under the path, not under `:`).
 Soft-wrapped continuations use the full terminal width — only the first visual line shares space with the prompt.
