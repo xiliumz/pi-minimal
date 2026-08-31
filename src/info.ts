@@ -1,5 +1,5 @@
 import type {
-	ExtensionCommandContext,
+	ExtensionContext,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
 import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
@@ -60,7 +60,7 @@ function collectTokenStats(branch: ReadonlyArray<BranchEntry>): TokenStats {
 }
 
 export function buildInfoLines(
-	ctx: ExtensionCommandContext,
+	ctx: ExtensionContext,
 	theme: Theme,
 	thinkingLevel: string,
 ): string[] {
@@ -150,7 +150,7 @@ export function buildInfoLines(
 }
 
 export async function showInfoUi(
-	ctx: ExtensionCommandContext,
+	ctx: ExtensionContext,
 	thinkingLevel: string,
 ): Promise<void> {
 	if (ctx.mode !== "tui" || !ctx.hasUI) {
