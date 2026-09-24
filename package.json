@@ -1,6 +1,6 @@
 {
-	"name": "pi-minimal",
-	"version": "0.1.0",
+	"name": "@xiliumz/pi-minimal",
+	"version": "1.0.0",
 	"description": "Bash-style prompt layout for pi — ~/path (branch*): with /info",
 	"type": "module",
 	"license": "MIT",

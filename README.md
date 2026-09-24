@@ -18,8 +18,8 @@ pi install git:github.com/xiliumz/pi-minimal
 # from a local checkout
 pi install /path/to/pi-minimal
 
-# from npm (after you publish)
-pi install npm:pi-minimal
+# from npm
+pi install npm:@xiliumz/pi-minimal
 ```
 
 Restart pi or run `/reload`.
@@ -70,7 +70,7 @@ src/ui.ts             # empty header/footer component
 ```bash
 pi remove git:github.com/xiliumz/pi-minimal
 # or
-pi remove npm:pi-minimal
+pi remove npm:@xiliumz/pi-minimal
 pi remove /path/to/pi-minimal
 ```
 
