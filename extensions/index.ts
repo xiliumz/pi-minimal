@@ -2,7 +2,8 @@
  * pi-minimal
  *
  * Bash-style prompt for pi:
- *   ~/path (branch*): |
+ *   ~/path (branch*):
+ *   $ |
  *
  * Header/footer chrome removed. Session stats via /info.
  */

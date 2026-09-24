@@ -37,10 +37,11 @@ interface LayoutLine {
 }
 
 /**
- * Borderless editor that prefixes the first input line with a bash-style prompt:
- *   ~/path (branch*): |
+ * Borderless editor with path above the input:
+ *   ~/path (branch*):
+ *   $ |
  *
- * Soft-wrap: first visual line shares the row with the prompt; every continuation
+ * Soft-wrap: first visual line reserves space for `$ `; every continuation
  * line uses the full terminal width at column 0.
  * Slash/path autocomplete also renders at column 0, full width.
  */
@@ -49,7 +50,7 @@ export function createBashPromptEditor(
 	state: BashPromptState,
 ): new (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => CustomEditor {
 	return class BashPromptEditor extends CustomEditor {
-		/** Columns reserved on the first visual line for the bash prompt. */
+		/** Columns reserved on the first visual line for `$ `. */
 		private promptInset = 0;
 
 		constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
@@ -86,7 +87,7 @@ export function createBashPromptEditor(
 
 		/**
 		 * Same shape as Editor.layoutText, but the first logical line's first chunk
-		 * is narrowed by `promptInset` so the prompt fits on that row. Soft-wrap
+		 * is narrowed by `promptInset` so `$ ` fits on that row. Soft-wrap
 		 * continuations (and later hard lines) use the full `contentWidth`.
 		 * Installed as the runtime `layoutText` override in the constructor.
 		 */
@@ -107,7 +108,7 @@ export function createBashPromptEditor(
 				const line = ed.state.lines[i] || "";
 				const isCurrentLine = i === ed.state.cursorLine;
 				const lineVisibleWidth = visibleWidth(line);
-				// Only the very first logical line pays the prompt tax, and only on
+				// Only the very first logical line pays the `$ ` tax, and only on
 				// its first visual chunk. Hard-newline lines are full width.
 				const useInset = i === 0 && inset > 0;
 				const fitsSingle =
@@ -173,23 +174,19 @@ export function createBashPromptEditor(
 		}
 
 		render(width: number): string[] {
-			const prompt = this.promptString();
-			const promptW = visibleWidth(prompt);
-			this.promptInset = promptW;
+			const prompt = truncateToWidth(this.promptString(), width, "");
+			const inputPrefix = width >= 3 ? "$ " : "";
+			this.promptInset = inputPrefix.length;
 
 			// Full terminal width — layoutText narrows only the first visual chunk.
 			const raw = super.render(width);
 			this.promptInset = 0;
 
-			if (raw.length === 0) {
-				return [truncateToWidth(prompt, width, "")];
-			}
+			if (raw.length === 0) return [prompt];
 
 			// raw: [topBorder, ...content, bottomBorder, ...autocomplete?]
 			const withoutTop = raw.slice(1);
-			if (withoutTop.length === 0) {
-				return [truncateToWidth(prompt, width, "")];
-			}
+			if (withoutTop.length === 0) return [prompt];
 
 			let borderIdx = -1;
 			for (let i = withoutTop.length - 1; i >= 0; i--) {
@@ -200,24 +197,20 @@ export function createBashPromptEditor(
 			}
 
 			const content = borderIdx >= 0 ? withoutTop.slice(0, borderIdx) : withoutTop;
-			const out: string[] = [];
+			const out: string[] = [prompt];
 			const scrolled = this.internals().scrollOffset > 0;
 			// First content row is padded to full width by Editor; keep only the
-			// budget to the right of the prompt, then splice the prompt in.
-			const firstBudget = Math.max(1, width - promptW);
+			// budget to the right of `$ `, then splice the prefix in.
+			const firstBudget = Math.max(1, width - inputPrefix.length);
 
-			if (content.length === 0) {
-				out.push(truncateToWidth(prompt, width, ""));
-			} else {
-				for (let i = 0; i < content.length; i++) {
-					const line = content[i]!;
-					if (i === 0 && !scrolled) {
-						const body = truncateToWidth(line, firstBudget, "");
-						out.push(truncateToWidth(prompt + body, width, ""));
-					} else {
-						// Column 0 — full width under the start of the prompt.
-						out.push(truncateToWidth(line, width, ""));
-					}
+			for (let i = 0; i < content.length; i++) {
+				const line = content[i]!;
+				if (i === 0 && !scrolled) {
+					const body = truncateToWidth(line, firstBudget, "");
+					out.push(truncateToWidth(inputPrefix + body, width, ""));
+				} else {
+					// Column 0 — full width for wrapped and hard-newline continuations.
+					out.push(truncateToWidth(line, width, ""));
 				}
 			}
 
