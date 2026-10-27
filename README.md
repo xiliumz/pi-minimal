@@ -32,6 +32,16 @@ Restart pi or run `/reload`.
 | Spinner | Shown in the prompt while the agent runs |
 | Header / footer | Removed |
 | `/info` / `F8` | Model, thinking level, context %, tokens, cost, session file/id |
+| Tool rows / `Ctrl+O` | Cycles **grouped** → **title** → **collapsed** → **full**. Starts grouped |
+
+Tool views:
+
+- **grouped** — back-to-back tool calls collapse into one `N tools` line; a lone call shows its name
+- **title** — one line per call, tool name only (red when the call failed)
+- **collapsed** — pi's default truncated preview
+- **full** — pi's normal expanded output
+
+Assistant text, thinking, and user messages end a group.
 
 Multiline input and slash-command autocomplete start at column 0 (under `$ `).
 Soft-wrapped continuations use the full terminal width — only the first visual line shares space with `$ `.
@@ -41,6 +51,10 @@ Soft-wrapped continuations use the full terminal width — only the first visual
 `/new`, `/resume`, and `/fork` briefly flash the stock pi header/footer/editor.
 Pi resets extension UI before the old session context goes stale, then re-runs
 `session_start` so this layout comes back. Extension-side fix is not available.
+
+`Ctrl+O` follows your `app.tools.expand` keybinding and shows the new view as
+`Tool output: <view>`. `/export` renders tools in
+the current view — switch to **full** first for complete HTML.
 
 ## Develop
 
@@ -58,7 +72,9 @@ Layout:
 
 ```
 extensions/index.ts   # pi entry (registers hooks + commands)
-src/editor.ts         # bash prompt CustomEditor
+src/editor.ts         # bash prompt CustomEditor (+ Ctrl+O hook)
+src/tool-view.ts      # grouped / title / full tool renderers
+src/tool-runs.ts      # tracks back-to-back tool calls
 src/info.ts           # /info UI + token stats
 src/git.ts            # branch + dirty
 src/format.ts         # cwd/tokens helpers

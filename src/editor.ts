@@ -21,6 +21,8 @@ export interface BashPromptState {
 	spinnerFrame: string;
 	/** Called when the editor mounts so the extension can request re-renders. */
 	onMount: (tui: TUI) => void;
+	/** Replaces pi's `app.tools.expand` (Ctrl+O) toggle. Extensions cannot bind that key directly. */
+	onToolsExpand: () => void;
 }
 
 /** Subset of Editor internals used for dual-width soft-wrap. */
@@ -52,15 +54,26 @@ export function createBashPromptEditor(
 	return class BashPromptEditor extends CustomEditor {
 		/** Columns reserved on the first visual line for `$ `. */
 		private promptInset = 0;
+		/** CustomEditor keeps its own copy private. */
+		private readonly keys: KeybindingsManager;
 
 		constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
 			super(tui, theme, keybindings, { paddingX: 0 });
+			this.keys = keybindings;
 			// pi-tui's Editor declares `private layoutText`; TS forbids a subclass
 			// member with that name (TS2415/TS2322), but JS ignores `private` at
 			// runtime — so install the override as an instance property instead.
 			(this as unknown as { layoutText: (contentWidth: number) => LayoutLine[] })
 				.layoutText = (contentWidth) => this.layoutWithInset(contentWidth);
 			state.onMount(tui);
+		}
+
+		override handleInput(data: string): void {
+			if (this.keys.matches(data, "app.tools.expand")) {
+				state.onToolsExpand();
+				return;
+			}
+			super.handleInput(data);
 		}
 
 		/** Host may push settings padding — keep 0 so prompt math stays correct. */
