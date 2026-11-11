@@ -100,9 +100,13 @@ function wrapRenderers(
 		renderCall(args, theme, context) {
 			const cache = row(context.toolCallId);
 			cache.redraw = context.invalidate;
-			if (isSummaryView(state.view)) return summaryLine(toolName, theme, context, state);
-
 			const baseContext = { ...context, lastComponent: cache.call };
+			if (isSummaryView(state.view)) {
+				// Still run the base renderer: it keeps per-row state, e.g. bash's elapsed timer.
+				if (base?.renderCall) cache.call = base.renderCall(args, theme, baseContext);
+				return summaryLine(toolName, theme, context, state);
+			}
+
 			cache.call = base?.renderCall
 				? base.renderCall(args, theme, baseContext)
 				: new Text(formatArgs(toolName, args, theme, context.expanded), 0, 0);
@@ -114,10 +118,13 @@ function wrapRenderers(
 		},
 
 		renderResult(result, options, theme, context) {
-			if (isSummaryView(state.view)) return new EmptyComponent();
-
 			const cache = row(context.toolCallId);
 			const baseContext = { ...context, lastComponent: cache.result };
+			if (isSummaryView(state.view)) {
+				if (base?.renderResult) cache.result = base.renderResult(result, options, theme, baseContext);
+				return new EmptyComponent();
+			}
+
 			cache.result = base?.renderResult
 				? base.renderResult(result, options, theme, baseContext)
 				: fallbackResult(result, theme, options.expanded);
